@@ -497,6 +497,9 @@
     .mobile-topbar {
       display: none;
     }
+    .panel-close-btn {
+      display: none;
+    }
 
     /* ===== Text Edit Tab ===== */
     .edit-tab-group {
@@ -609,6 +612,19 @@
       .input-panel textarea {
         min-height: 200px;
       }
+      .panel-close-btn {
+        display: block !important;
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        background: none;
+        border: none;
+        font-size: 15px;
+        color: #8a6d3b;
+        cursor: pointer;
+        padding: 4px 10px;
+        z-index: 10;
+      }
 
       /* Preview area */
       .cards-grid {
@@ -655,13 +671,14 @@
     <span class="mobile-topbar-title">卡片生成器</span>
     <div class="mobile-topbar-actions">
       <button class="mobile-topbar-btn" onclick="toggleMobilePanel()">设置</button>
-      <button class="mobile-topbar-btn primary" onclick="generateCards()">生成</button>
     </div>
   </div>
 
   <div class="app-container">
     <!-- Input Panel -->
     <div class="input-panel">
+      <!-- Mobile close button -->
+      <button class="panel-close-btn" onclick="closeMobilePanel()">← 返回</button>
       <div>
         <h1 style="font-size: 20px; font-weight: 700; margin: 0 0 4px 0;">小红书图文卡片生成器</h1>
         <p style="font-size: 13px; color: #888; margin: 0;">v0.5 · 移动端优化 · 支持文字编辑</p>
@@ -1179,6 +1196,9 @@
       // Update card data
       currentCards[editingCardIndex].content = newText;
 
+      // Sync back to main input: rebuild card markers in the textarea
+      syncCardToInput(editingCardIndex, newText);
+
       // Re-render just this one card
       const card = currentCards[editingCardIndex];
       const brandName = document.getElementById('brand-name').value.trim();
@@ -1193,8 +1213,83 @@
         applyCardOverrides(editingCardIndex);
       }
 
+      // Show feedback
+      const btn = document.querySelector('#tab-text .btn-secondary');
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = '✓ 已保存';
+        btn.style.color = '#4a8';
+        setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1200);
+      }
+
       autoSave();
-      closeCardEditor();
+    }
+
+    // Sync edited card content back to the main text input
+    function syncCardToInput(cardIndex, newContent) {
+      const input = document.getElementById('card-input');
+      const text = input.value;
+      const lines = text.split('\n');
+      const cardMarker = /^【(.+?)】/;
+
+      // Find all card sections in the input
+      const sections = [];
+      let currentSection = null;
+      let currentLines = [];
+
+      for (const line of lines) {
+        const match = line.trim().match(cardMarker);
+        if (match) {
+          if (currentSection) {
+            sections.push({ ...currentSection, content: currentLines.join('\n').trim() });
+          }
+          currentSection = { label: match[1].trim(), startLine: line };
+          currentLines = [];
+        } else {
+          if (currentSection) currentLines.push(line);
+        }
+      }
+      if (currentSection) {
+        sections.push({ ...currentSection, content: currentLines.join('\n').trim() });
+      }
+
+      // Map currentCards to sections (accounting for auto-split)
+      // Find which section this card belongs to by matching label
+      const card = currentCards[cardIndex];
+      if (!card) return;
+
+      // Find the matching section by label prefix
+      let sectionIdx = -1;
+      for (let i = 0; i < sections.length; i++) {
+        const secLabel = sections[i].label;
+        const cardLabel = card.label.split('(')[0].trim();
+        if (secLabel.includes(cardLabel) || cardLabel.includes(secLabel)) {
+          // Check if this section hasn't been claimed by a previous card with the same label
+          sectionIdx = i;
+          break;
+        }
+      }
+
+      if (sectionIdx >= 0) {
+        sections[sectionIdx].content = newContent;
+      }
+
+      // Rebuild the input text
+      let rebuilt = [];
+      // Preserve any content before the first card marker
+      let beforeFirst = true;
+      for (const line of lines) {
+        if (line.trim().match(cardMarker)) { beforeFirst = false; break; }
+        if (beforeFirst) rebuilt.push(line);
+      }
+
+      for (const sec of sections) {
+        rebuilt.push(sec.startLine);
+        if (sec.content) rebuilt.push(sec.content);
+        rebuilt.push(''); // blank line between sections
+      }
+
+      input.value = rebuilt.join('\n').trim();
     }
 
     function updateEditValue(prop, value) {
