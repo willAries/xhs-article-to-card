@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小红书图文卡片生成器 v0.4</title>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: #f0f0f0;
+      padding: 20px;
+    }
+
+    /* ===== Layout ===== */
+    .app-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+    }
+
+    .input-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    /* ===== Controls ===== */
+    .input-panel textarea {
+      width: 100%;
+      min-height: 280px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+      font-family: inherit;
+    }
+    .input-panel textarea:focus { outline: none; border-color: #d4a574; }
+
+    .template-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+    .template-btn {
+      padding: 8px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .template-btn:hover { border-color: #d4a574; }
+    .template-btn.active { border-color: #d4a574; background: #faf6f0; color: #8a6d3b; }
+
+    .font-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+    .font-btn {
+      padding: 6px 14px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .font-btn:hover { border-color: #d4a574; }
+    .font-btn.active { border-color: #d4a574; background: #faf6f0; color: #8a6d3b; }
+
+    /* Custom color panel */
+    .custom-color-panel {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      background: #faf8f5;
+      border-radius: 8px;
+      border: 1px solid #e8e0d4;
+    }
+    .custom-color-panel.visible { display: flex; }
+    .color-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .color-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .color-field label {
+      font-size: 11px;
+      color: #888;
+    }
+    .color-field input[type="color"] {
+      width: 44px;
+      height: 32px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 2px;
+    }
+    .saved-tpl-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding-top: 6px;
+      border-top: 1px solid #e8e0d4;
+    }
+    .saved-tpl-row select {
+      flex: 1;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px 6px;
+    }
+    .btn-tiny {
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 1px solid #d4a574;
+      border-radius: 4px;
+      background: #faf6f0;
+      color: #8a6d3b;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-tiny:hover { background: #f0e8d8; }
+    .btn-tiny.danger { border-color: #d4606a; color: #d4606a; background: #fdf0f2; }
+    .btn-tiny.danger:hover { background: #fce0e5; }
+
+    .btn-primary {
+      background: #8a6d3b;
+      color: white; border: none;
+      padding: 12px 24px; border-radius: 8px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-primary:hover { background: #7a5d2b; }
+
+    .btn-secondary {
+      background: white; color: #333;
+      border: 1px solid #e0e0e0;
+      padding: 10px 20px; border-radius: 8px;
+      font-size: 14px; cursor: pointer;
+    }
+    .btn-secondary:hover { background: #f5f5f5; }
+
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .section-title {
+      font-size: 13px; font-weight: 600;
+      color: #555; margin-bottom: 6px;
+    }
+
+    .brand-input { display: flex; gap: 8px; align-items: center; }
+    .brand-input input {
+      flex: 1; border: 1px solid #e0e0e0;
+      border-radius: 6px; padding: 8px 10px; font-size: 13px;
+    }
+    .brand-input input:focus { outline: none; border-color: #d4a574; }
+
+    /* Draft management */
+    .draft-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .draft-row select {
+      flex: 1;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+
+    /* ===== Card Preview Grid ===== */
+    .cards-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: flex-start;
+    }
+
+    .card-wrapper {
+      position: relative;
+      width: 270px;
+      height: 360px;
+      overflow: hidden;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .card-wrapper:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+    .card-wrapper.editing {
+      box-shadow: 0 0 0 3px #d4a574, 0 4px 16px rgba(212,165,116,0.3);
+    }
+
+    .card-overlay-btn {
+      position: absolute;
+      bottom: 4px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 10;
+    }
+    .card-download-btn { right: 4px; }
+    .card-edit-btn { left: 4px; }
+    .card-wrapper:hover .card-overlay-btn { opacity: 1; }
+
+    /* ===== Card Edit Panel (floating) ===== */
+    .card-edit-panel {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 280px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      z-index: 100;
+      overflow: hidden;
+    }
+    .card-edit-panel.visible { display: block; }
+    .edit-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #8a6d3b;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .edit-panel-header button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .edit-panel-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .edit-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .edit-control label {
+      font-size: 12px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+    .edit-control label span {
+      color: #8a6d3b;
+      font-weight: 600;
+    }
+    .edit-control input[type="range"] {
+      width: 100%;
+      accent-color: #d4a574;
+    }
+    .align-btn-group { display: flex; gap: 6px; }
+    .align-btn {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .align-btn:hover { border-color: #d4a574; }
+    .align-btn.active { border-color: #d4a574; background: #faf6f0; color: #8a6d3b; }
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #eee;
+    }
+    .edit-actions button {
+      flex: 1;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* ===== XHS Card — rendered at 1080x1440, scaled for preview ===== */
+    .card-scale-container {
+      width: 1080px;
+      height: 1440px;
+      transform-origin: top left;
+      transform: scale(0.25);
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .xhs-card {
+      width: 1080px;
+      height: 1440px;
+      padding: 110px 100px;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Font families */
+    .xhs-card.font-default {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+    .xhs-card.font-serif {
+      font-family: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+    }
+    .xhs-card.font-modern {
+      font-family: 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', sans-serif;
+    }
+
+    /* Card content elements */
+    .card-title {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 48px;
+      letter-spacing: 1px;
+    }
+
+    .card-body {
+      font-size: 42px;
+      line-height: 1.9;
+      flex: 1;
+    }
+
+    .card-body strong { font-weight: 600; }
+    .card-body em { font-style: italic; }
+
+    .card-body h2 {
+      font-size: 54px;
+      font-weight: 800;
+      margin-bottom: 36px;
+      margin-top: 24px;
+      line-height: 1.3;
+      letter-spacing: 0.5px;
+    }
+    .card-body h2:first-child {
+      margin-top: 0;
+    }
+
+    .card-body p { margin-bottom: 24px; }
+    .card-body ul { margin-bottom: 24px; padding-left: 36px; }
+    .card-body li { margin-bottom: 14px; }
+
+    .card-body blockquote {
+      border-left: 4px solid currentColor;
+      padding-left: 28px;
+      margin: 28px 0;
+      opacity: 0.8;
+      font-style: italic;
+    }
+    .card-body hr {
+      border: none;
+      border-top: 1px solid rgba(0,0,0,0.1);
+      margin: 28px 0;
+    }
+
+    .card-footer {
+      font-size: 32px;
+      margin-top: auto;
+      padding-top: 40px;
+      opacity: 0.5;
+      text-align: left;
+    }
+
+    /* Cover card */
+    .xhs-card.is-cover {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .xhs-card.is-cover .card-title {
+      font-size: 76px;
+      margin-bottom: 40px;
+      line-height: 1.25;
+      text-align: center;
+    }
+    .xhs-card.is-cover .card-subtitle {
+      font-size: 40px;
+      line-height: 1.7;
+      opacity: 0.7;
+      text-align: center;
+      max-width: 80%;
+    }
+    .xhs-card.is-cover .card-accent {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .xhs-card.is-cover .card-footer {
+      text-align: center;
+    }
+
+    .card-accent {
+      width: 60px;
+      height: 5px;
+      margin-bottom: 44px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* ===== Templates ===== */
+    .tpl-warm-cream {
+      background: linear-gradient(160deg, #fdfcfa 0%, #f8f5f0 100%);
+      color: #4a3f35;
+    }
+    .tpl-warm-cream .card-title { color: #3d342a; }
+    .tpl-warm-cream .card-body { color: #5c4f42; }
+    .tpl-warm-cream .card-body strong { color: #3d342a; }
+    .tpl-warm-cream .card-body h2 { color: #3d342a; }
+    .tpl-warm-cream .card-footer { color: #a0958a; }
+    .tpl-warm-cream .card-accent { background: #c4a87a; }
+
+    .tpl-soft-pink {
+      background: linear-gradient(160deg, #fefbfc 0%, #f9eef2 100%);
+      color: #4a3340;
+    }
+    .tpl-soft-pink .card-title { color: #c4607a; }
+    .tpl-soft-pink .card-body { color: #6a4d5a; }
+    .tpl-soft-pink .card-body strong { color: #c4607a; }
+    .tpl-soft-pink .card-body h2 { color: #c4607a; }
+    .tpl-soft-pink .card-footer { color: #c8b0bc; }
+    .tpl-soft-pink .card-accent { background: #d49aaa; }
+
+    .tpl-dark-mode {
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+      color: #c8c8d0;
+    }
+    .tpl-dark-mode .card-title { color: #ffffff; }
+    .tpl-dark-mode .card-body { color: #b0b0b8; }
+    .tpl-dark-mode .card-body strong { color: #7dd3c0; }
+    .tpl-dark-mode .card-body h2 { color: #ffffff; }
+    .tpl-dark-mode .card-footer { color: #555568; }
+    .tpl-dark-mode .card-accent { background: #7dd3c0; }
+
+    .tpl-sage-green {
+      background: linear-gradient(160deg, #f8faf8 0%, #eef3ee 100%);
+      color: #3a4a3a;
+    }
+    .tpl-sage-green .card-title { color: #2d3d2d; }
+    .tpl-sage-green .card-body { color: #4a5d4a; }
+    .tpl-sage-green .card-body strong { color: #2d3d2d; }
+    .tpl-sage-green .card-body h2 { color: #2d3d2d; }
+    .tpl-sage-green .card-footer { color: #8a9d8a; }
+    .tpl-sage-green .card-accent { background: #8aaa8a; }
+
+    .tpl-custom {
+      background: var(--custom-bg, #f8f5f0);
+      color: var(--custom-body, #4a3f35);
+    }
+    .tpl-custom .card-title { color: var(--custom-title, #3d342a); }
+    .tpl-custom .card-body { color: var(--custom-body, #5c4f42); }
+    .tpl-custom .card-body strong { color: var(--custom-title, #3d342a); }
+    .tpl-custom .card-body h2 { color: var(--custom-title, #3d342a); }
+    .tpl-custom .card-footer { color: var(--custom-accent, #a0958a); opacity: 0.6; }
+    .tpl-custom .card-accent { background: var(--custom-accent, #c4a87a); }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: #999;
+      font-size: 15px;
+    }
+    .card-count-info {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Input Panel -->
+    <div class="input-panel">
+      <div>
+        <h1 style="font-size: 20px; font-weight: 700; margin: 0 0 4px 0;">小红书图文卡片生成器</h1>
+        <p style="font-size: 13px; color: #888; margin: 0;">v0.4 · 支持单卡编辑、模板保存、草稿管理</p>
+      </div>
+
+      <div>
+        <div class="section-title">视觉风格</div>
+        <div class="template-selector">
+          <button class="template-btn active" data-template="warm-cream">奶油白</button>
+          <button class="template-btn" data-template="soft-pink">淡粉</button>
+          <button class="template-btn" data-template="sage-green">鼠尾草绿</button>
+          <button class="template-btn" data-template="dark-mode">深色</button>
+          <button class="template-btn" data-template="custom">自定义</button>
+        </div>
+      </div>
+
+      <!-- Custom color panel -->
+      <div class="custom-color-panel" id="custom-color-panel">
+        <div class="color-row">
+          <div class="color-field">
+            <label>背景</label>
+            <input type="color" id="color-bg" value="#f8f5f0">
+          </div>
+          <div class="color-field">
+            <label>标题</label>
+            <input type="color" id="color-title" value="#3d342a">
+          </div>
+          <div class="color-field">
+            <label>正文</label>
+            <input type="color" id="color-body" value="#5c4f42">
+          </div>
+          <div class="color-field">
+            <label>强调</label>
+            <input type="color" id="color-accent" value="#c4a87a">
+          </div>
+        </div>
+        <div class="saved-tpl-row">
+          <select id="saved-template-list">
+            <option value="">已保存的模板...</option>
+          </select>
+          <button class="btn-tiny" onclick="saveCurrentTemplate()">保存</button>
+          <button class="btn-tiny danger" onclick="deleteSavedTemplate()">删除</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">字体</div>
+        <div class="font-selector">
+          <button class="font-btn active" data-font="default">系统默认</button>
+          <button class="font-btn" data-font="serif">衬线优雅</button>
+          <button class="font-btn" data-font="modern">现代圆润</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">品牌署名</div>
+        <div class="brand-input">
+          <input type="text" id="brand-name" placeholder="如：Authera" value="Authera">
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">卡片文字内容</div>
+        <textarea id="card-input" placeholder="粘贴带 【封面卡】【卡片 1】等标记的文字内容..."></textarea>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn-primary" onclick="generateCards()">生成预览</button>
+        <button class="btn-secondary" onclick="downloadAll()">下载全部</button>
+        <button class="btn-secondary" onclick="loadSample()">载入示例</button>
+      </div>
+
+      <div>
+        <div class="section-title">草稿管理</div>
+        <div class="draft-row">
+          <select id="draft-list">
+            <option value="">选择草稿...</option>
+          </select>
+          <button class="btn-tiny" onclick="saveDraft()">保存草稿</button>
+          <button class="btn-tiny danger" onclick="deleteDraft()">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div>
+      <div id="preview-area">
+        <div class="empty-state">
+          点击「载入示例」试试效果，或粘贴你自己的卡片内容
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Card Edit Panel -->
+  <div class="card-edit-panel" id="card-edit-panel">
+    <div class="edit-panel-header">
+      <span>编辑卡片 #<span id="editing-card-num">1</span></span>
+      <button onclick="closeCardEditor()">×</button>
+    </div>
+    <div class="edit-panel-body">
+      <div class="edit-control">
+        <label>正文字号 <span id="val-fontsize">42px</span></label>
+        <input type="range" id="edit-fontsize" min="32" max="56" value="42">
+      </div>
+      <div class="edit-control">
+        <label>标题字号 <span id="val-h2size">54px</span></label>
+        <input type="range" id="edit-h2size" min="40" max="72" value="54">
+      </div>
+      <div class="edit-control">
+        <label>行高 <span id="val-lineheight">1.9</span></label>
+        <input type="range" id="edit-lineheight" min="1.5" max="2.5" step="0.05" value="1.9">
+      </div>
+      <div class="edit-control">
+        <label>对齐方式</label>
+        <div class="align-btn-group">
+          <button class="align-btn active" data-align="left">左对齐</button>
+          <button class="align-btn" data-align="center">居中</button>
+          <button class="align-btn" data-align="right">右对齐</button>
+        </div>
+      </div>
+      <div class="edit-control">
+        <label>段间距 <span id="val-marginspace">24px</span></label>
+        <input type="range" id="edit-marginspace" min="12" max="48" value="24">
+      </div>
+      <div class="edit-actions">
+        <button class="btn-secondary" onclick="resetCardOverride()" style="font-size:12px;">重置此卡</button>
+        <button class="btn-secondary" onclick="applyOverridesToAll()" style="font-size:12px;">应用到全部</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== State ==========
+    let currentTemplate = 'warm-cream';
+    let currentFont = 'default';
+    let currentCards = [];
+    let editingCardIndex = -1;
+    let cardOverrides = {};
+
+    const templateMap = {
+      'warm-cream': 'tpl-warm-cream',
+      'soft-pink': 'tpl-soft-pink',
+      'sage-green': 'tpl-sage-green',
+      'dark-mode': 'tpl-dark-mode',
+      'custom': 'tpl-custom'
+    };
+
+    // ========== Card Text Parser ==========
+    function parseCardText(text) {
+      const lines = text.trim().split('\n');
+      const cards = [];
+      let currentCard = null;
+      let currentContent = [];
+      const cardMarker = /^【(.+?)】/;
+
+      for (const line of lines) {
+        const match = line.trim().match(cardMarker);
+        if (match) {
+          if (currentCard) {
+            currentCard.content = currentContent.join('\n').trim();
+            cards.push(currentCard);
+          }
+          const label = match[1].trim();
+          const isCover = label.includes('封面');
+          const isEnd = label.includes('尾卡') || label.includes('互动') || label.includes('结尾');
+          currentCard = { label, type: isCover ? 'cover' : (isEnd ? 'end' : 'content'), content: '' };
+          currentContent = [];
+        } else {
+          if (currentCard) currentContent.push(line);
+        }
+      }
+      if (currentCard) {
+        currentCard.content = currentContent.join('\n').trim();
+        cards.push(currentCard);
+      }
+      return cards;
+    }
+
+    // ========== DOM-based overflow detection & auto-split ==========
+    const CARD_TOTAL_HEIGHT = 1440;
+    const CARD_PADDING_V = 220;
+    const ACCENT_AND_MARGIN = 49;
+    const FOOTER_AREA = 72;
+    const BODY_AVAILABLE_HEIGHT = CARD_TOTAL_HEIGHT - CARD_PADDING_V - ACCENT_AND_MARGIN - FOOTER_AREA;
+
+    function getTemplateClass() {
+      return templateMap[currentTemplate] + ' font-' + currentFont;
+    }
+
+    function applyCustomColors(el) {
+      if (currentTemplate === 'custom') {
+        el.style.setProperty('--custom-bg', document.getElementById('color-bg').value);
+        el.style.setProperty('--custom-title', document.getElementById('color-title').value);
+        el.style.setProperty('--custom-body', document.getElementById('color-body').value);
+        el.style.setProperty('--custom-accent', document.getElementById('color-accent').value);
+      }
+    }
+
+    function measureContentHeight(contentHtml) {
+      const measureDiv = document.createElement('div');
+      measureDiv.className = 'xhs-card ' + getTemplateClass();
+      measureDiv.style.cssText = 'position:absolute; left:-9999px; top:0; width:1080px; height:auto; visibility:hidden;';
+      applyCustomColors(measureDiv);
+      const accent = document.createElement('div');
+      accent.className = 'card-accent';
+      measureDiv.appendChild(accent);
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'card-body';
+      bodyDiv.innerHTML = contentHtml;
+      measureDiv.appendChild(bodyDiv);
+      document.body.appendChild(measureDiv);
+      const bodyHeight = bodyDiv.scrollHeight;
+      document.body.removeChild(measureDiv);
+      return bodyHeight;
+    }
+
+    function splitCardContentByDOM(content) {
+      const contentHtml = renderMarkdown(content);
+      const height = measureContentHeight(contentHtml);
+      if (height <= BODY_AVAILABLE_HEIGHT) return [content];
+
+      const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
+      if (paragraphs.length <= 1) return splitByLines(content);
+
+      const chunks = [];
+      let currentParts = [];
+
+      for (const para of paragraphs) {
+        const tryParts = [...currentParts, para];
+        const tryHtml = renderMarkdown(tryParts.join('\n\n'));
+        const tryHeight = measureContentHeight(tryHtml);
+        if (tryHeight > BODY_AVAILABLE_HEIGHT && currentParts.length > 0) {
+          chunks.push(currentParts.join('\n\n'));
+          const paraHeight = measureContentHeight(renderMarkdown(para));
+          if (paraHeight > BODY_AVAILABLE_HEIGHT) {
+            chunks.push(...splitByLines(para));
+            currentParts = [];
+          } else {
+            currentParts = [para];
+          }
+        } else {
+          currentParts = tryParts;
+        }
+      }
+      if (currentParts.length > 0) chunks.push(currentParts.join('\n\n'));
+      return chunks.length > 0 ? chunks : [content];
+    }
+
+    function splitByLines(content) {
+      const lines = content.split('\n');
+      if (lines.length <= 1) return [content];
+      const chunks = [];
+      let currentLines = [];
+      for (const line of lines) {
+        const tryLines = [...currentLines, line];
+        const tryHeight = measureContentHeight(renderMarkdown(tryLines.join('\n')));
+        if (tryHeight > BODY_AVAILABLE_HEIGHT && currentLines.length > 0) {
+          chunks.push(currentLines.join('\n'));
+          currentLines = [line];
+        } else {
+          currentLines.push(line);
+        }
+      }
+      if (currentLines.length > 0) chunks.push(currentLines.join('\n'));
+      return chunks.length > 0 ? chunks : [content];
+    }
+
+    function processCards(rawCards) {
+      const result = [];
+      for (const card of rawCards) {
+        if (card.type === 'cover' || card.type === 'end') {
+          result.push(card);
+        } else {
+          const chunks = splitCardContentByDOM(card.content);
+          chunks.forEach((chunk, i) => {
+            result.push({
+              label: chunks.length > 1 ? `${card.label} (${i + 1}/${chunks.length})` : card.label,
+              type: 'content',
+              content: chunk
+            });
+          });
+        }
+      }
+      return result;
+    }
+
+    // ========== Markdown Renderer ==========
+    function renderMarkdown(text) {
+      let html = text;
+      html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      const lines = html.split('\n');
+      const result = [];
+      let inList = false, inBlockquote = false;
+
+      for (let line of lines) {
+        if (line.trim() === '---') {
+          if (inList) { result.push('</ul>'); inList = false; }
+          if (inBlockquote) { result.push('</blockquote>'); inBlockquote = false; }
+          result.push('<hr>');
+          continue;
+        }
+        if (line.match(/^\s*[-•]\s+/)) {
+          if (!inList) { result.push('<ul>'); inList = true; }
+          result.push('<li>' + line.replace(/^\s*[-•]\s+/, '') + '</li>');
+          continue;
+        } else if (inList) { result.push('</ul>'); inList = false; }
+
+        if (line.trim().startsWith('&gt; ')) {
+          if (!inBlockquote) { result.push('<blockquote>'); inBlockquote = true; }
+          result.push(line.trim().replace(/^&gt;\s*/, ''));
+          continue;
+        } else if (inBlockquote) { result.push('</blockquote>'); inBlockquote = false; }
+
+        if (line.trim() === '') continue;
+        result.push('<p>' + line + '</p>');
+      }
+      if (inList) result.push('</ul>');
+      if (inBlockquote) result.push('</blockquote>');
+      return result.join('');
+    }
+
+    // ========== Card Renderer ==========
+    function renderCardHTML(card, index, brandName) {
+      const tplClass = getTemplateClass();
+      const isCover = card.type === 'cover';
+      const footer = brandName ? '<div class="card-footer">@ ' + brandName + '</div>' : '';
+
+      if (isCover) {
+        const contentLines = card.content.split('\n').filter(l => l.trim());
+        const titleLine = contentLines[0] || '';
+        const subtitleLines = contentLines.slice(1).join('\n');
+        const cleanTitle = titleLine.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+        return `<div class="xhs-card ${tplClass} is-cover" data-card-index="${index}">
+          <div class="card-accent"></div>
+          <div class="card-title">${cleanTitle}</div>
+          ${subtitleLines ? '<div class="card-subtitle">' + renderMarkdown(subtitleLines) + '</div>' : ''}
+          ${footer}</div>`;
+      }
+
+      const contentHtml = renderMarkdown(card.content);
+      return `<div class="xhs-card ${tplClass}" data-card-index="${index}">
+        <div class="card-accent"></div>
+        <div class="card-body">${contentHtml}</div>
+        ${footer}</div>`;
+    }
+
+    function generateCards() {
+      const input = document.getElementById('card-input').value;
+      const brandName = document.getElementById('brand-name').value.trim();
+      const previewArea = document.getElementById('preview-area');
+
+      if (!input.trim()) {
+        previewArea.innerHTML = '<div class="empty-state">请粘贴卡片文字内容</div>';
+        return;
+      }
+
+      const rawCards = parseCardText(input);
+      if (rawCards.length === 0) {
+        previewArea.innerHTML = '<div class="empty-state">未检测到卡片标记，请确保文字中包含 【封面卡】【卡片 1】 等标记</div>';
+        return;
+      }
+
+      currentCards = processCards(rawCards);
+
+      let html = `<div class="card-count-info">共 ${currentCards.length} 张卡片 · 点击卡片可编辑排版 · 3:4 · 1080×1440</div>`;
+      html += '<div class="cards-grid">';
+
+      currentCards.forEach((card, i) => {
+        const cardHTML = renderCardHTML(card, i + 1, brandName);
+        html += `<div class="card-wrapper" id="wrapper-${i}" onclick="openCardEditor(${i})">
+          <div class="card-scale-container" id="scale-${i}">${cardHTML}</div>
+          <button class="card-overlay-btn card-edit-btn" onclick="event.stopPropagation(); openCardEditor(${i})">编辑</button>
+          <button class="card-overlay-btn card-download-btn" onclick="event.stopPropagation(); downloadCard(${i})">下载</button>
+        </div>`;
+      });
+
+      html += '</div>';
+      previewArea.innerHTML = html;
+
+      if (currentTemplate === 'custom') {
+        document.querySelectorAll('.xhs-card.tpl-custom').forEach(el => applyCustomColors(el));
+      }
+
+      applyAllCardOverrides();
+      autoSave();
+    }
+
+    // ========== Per-card Overrides ==========
+    function applyCardOverrides(index) {
+      const scaleContainer = document.getElementById(`scale-${index}`);
+      if (!scaleContainer) return;
+      const cardEl = scaleContainer.querySelector('.xhs-card');
+      if (!cardEl) return;
+      const ov = cardOverrides[index];
+      if (!ov) return;
+
+      const body = cardEl.querySelector('.card-body');
+      if (body) {
+        if (ov.bodyFontSize) body.style.fontSize = ov.bodyFontSize + 'px';
+        if (ov.bodyLineHeight) body.style.lineHeight = ov.bodyLineHeight;
+        if (ov.textAlign) body.style.textAlign = ov.textAlign;
+        if (ov.marginSpace) {
+          body.querySelectorAll('p').forEach(p => p.style.marginBottom = ov.marginSpace + 'px');
+          body.querySelectorAll('ul').forEach(ul => ul.style.marginBottom = ov.marginSpace + 'px');
+        }
+      }
+      cardEl.querySelectorAll('.card-body h2').forEach(h2 => {
+        if (ov.h2FontSize) h2.style.fontSize = ov.h2FontSize + 'px';
+      });
+    }
+
+    function applyAllCardOverrides() {
+      for (const idx in cardOverrides) {
+        applyCardOverrides(parseInt(idx));
+      }
+    }
+
+    function openCardEditor(index) {
+      editingCardIndex = index;
+      document.getElementById('editing-card-num').textContent = index + 1;
+
+      // Highlight selected card
+      document.querySelectorAll('.card-wrapper').forEach((w, i) => {
+        w.classList.toggle('editing', i === index);
+      });
+
+      // Load current values
+      const ov = cardOverrides[index] || {};
+      const fsVal = ov.bodyFontSize || 42;
+      const h2Val = ov.h2FontSize || 54;
+      const lhVal = ov.bodyLineHeight || 1.9;
+      const msVal = ov.marginSpace || 24;
+      const alignVal = ov.textAlign || 'left';
+
+      document.getElementById('edit-fontsize').value = fsVal;
+      document.getElementById('val-fontsize').textContent = fsVal + 'px';
+      document.getElementById('edit-h2size').value = h2Val;
+      document.getElementById('val-h2size').textContent = h2Val + 'px';
+      document.getElementById('edit-lineheight').value = lhVal;
+      document.getElementById('val-lineheight').textContent = lhVal;
+      document.getElementById('edit-marginspace').value = msVal;
+      document.getElementById('val-marginspace').textContent = msVal + 'px';
+
+      document.querySelectorAll('.align-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.align === alignVal);
+      });
+
+      document.getElementById('card-edit-panel').classList.add('visible');
+    }
+
+    function closeCardEditor() {
+      editingCardIndex = -1;
+      document.getElementById('card-edit-panel').classList.remove('visible');
+      document.querySelectorAll('.card-wrapper').forEach(w => w.classList.remove('editing'));
+    }
+
+    function updateEditValue(prop, value) {
+      if (editingCardIndex < 0) return;
+      if (!cardOverrides[editingCardIndex]) cardOverrides[editingCardIndex] = {};
+      cardOverrides[editingCardIndex][prop] = parseFloat(value);
+      applyCardOverrides(editingCardIndex);
+      autoSave();
+    }
+
+    function resetCardOverride() {
+      if (editingCardIndex < 0) return;
+      delete cardOverrides[editingCardIndex];
+      generateCards();
+      openCardEditor(editingCardIndex);
+    }
+
+    function applyOverridesToAll() {
+      if (editingCardIndex < 0) return;
+      const ov = cardOverrides[editingCardIndex];
+      if (!ov) {
+        alert('请先调整当前卡片的设置，再应用到全部');
+        return;
+      }
+      for (let i = 0; i < currentCards.length; i++) {
+        cardOverrides[i] = { ...ov };
+      }
+      applyAllCardOverrides();
+      autoSave();
+    }
+
+    // Edit panel event listeners
+    document.getElementById('edit-fontsize').addEventListener('input', e => {
+      document.getElementById('val-fontsize').textContent = e.target.value + 'px';
+      updateEditValue('bodyFontSize', e.target.value);
+    });
+    document.getElementById('edit-h2size').addEventListener('input', e => {
+      document.getElementById('val-h2size').textContent = e.target.value + 'px';
+      updateEditValue('h2FontSize', e.target.value);
+    });
+    document.getElementById('edit-lineheight').addEventListener('input', e => {
+      document.getElementById('val-lineheight').textContent = e.target.value;
+      updateEditValue('bodyLineHeight', e.target.value);
+    });
+    document.getElementById('edit-marginspace').addEventListener('input', e => {
+      document.getElementById('val-marginspace').textContent = e.target.value + 'px';
+      updateEditValue('marginSpace', e.target.value);
+    });
+    document.querySelectorAll('.align-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.align-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (editingCardIndex >= 0) {
+          if (!cardOverrides[editingCardIndex]) cardOverrides[editingCardIndex] = {};
+          cardOverrides[editingCardIndex].textAlign = btn.dataset.align;
+          applyCardOverrides(editingCardIndex);
+          autoSave();
+        }
+      });
+    });
+
+    // ========== Image Export ==========
+    async function downloadCard(index) {
+      const scaleContainer = document.getElementById(`scale-${index}`);
+      if (!scaleContainer) return;
+      const cardEl = scaleContainer.querySelector('.xhs-card');
+      if (!cardEl) return;
+
+      const exportArea = document.createElement('div');
+      exportArea.style.cssText = 'position:absolute; left:-9999px; top:0; width:1080px; height:1440px;';
+      document.body.appendChild(exportArea);
+
+      const clone = cardEl.cloneNode(true);
+      clone.style.transform = '';
+      if (currentTemplate === 'custom') applyCustomColors(clone);
+      exportArea.appendChild(clone);
+
+      try {
+        const canvas = await html2canvas(clone, {
+          width: 1080, height: 1440, scale: 1, useCORS: true, backgroundColor: '#ffffff',
+        });
+        const link = document.createElement('a');
+        link.download = `xhs-card-${index + 1}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error('Export failed:', err);
+        alert('图片导出失败，请重试');
+      }
+      document.body.removeChild(exportArea);
+    }
+
+    async function downloadAll() {
+      if (currentCards.length === 0) { alert('请先生成预览'); return; }
+      for (let i = 0; i < currentCards.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        await downloadCard(i);
+      }
+    }
+
+    // ========== Template & Font Selectors ==========
+    document.querySelectorAll('.template-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTemplate = btn.dataset.template;
+        document.getElementById('custom-color-panel').classList.toggle('visible', currentTemplate === 'custom');
+        if (currentCards.length > 0) generateCards();
+        autoSave();
+      });
+    });
+
+    document.querySelectorAll('.font-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.font-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFont = btn.dataset.font;
+        if (currentCards.length > 0) generateCards();
+        autoSave();
+      });
+    });
+
+    document.querySelectorAll('#custom-color-panel input[type="color"]').forEach(input => {
+      input.addEventListener('input', () => {
+        if (currentCards.length > 0 && currentTemplate === 'custom') generateCards();
+      });
+    });
+
+    // ========== Saved Templates (localStorage) ==========
+    function getSavedTemplates() {
+      try { return JSON.parse(localStorage.getItem('xhs-saved-templates') || '[]'); }
+      catch { return []; }
+    }
+
+    function saveCurrentTemplate() {
+      const name = prompt('模板名称：', '我的模板 ' + (getSavedTemplates().length + 1));
+      if (!name) return;
+      const tpl = {
+        id: Date.now(),
+        name: name,
+        bg: document.getElementById('color-bg').value,
+        title: document.getElementById('color-title').value,
+        body: document.getElementById('color-body').value,
+        accent: document.getElementById('color-accent').value
+      };
+      const templates = getSavedTemplates();
+      templates.push(tpl);
+      localStorage.setItem('xhs-saved-templates', JSON.stringify(templates));
+      updateTemplateList();
+      const sel = document.getElementById('saved-template-list');
+      sel.value = tpl.id;
+    }
+
+    function loadSavedTemplate(id) {
+      if (!id) return;
+      const tpl = getSavedTemplates().find(t => t.id === parseInt(id));
+      if (!tpl) return;
+      document.getElementById('color-bg').value = tpl.bg;
+      document.getElementById('color-title').value = tpl.title;
+      document.getElementById('color-body').value = tpl.body;
+      document.getElementById('color-accent').value = tpl.accent;
+      currentTemplate = 'custom';
+      document.querySelectorAll('.template-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.template === 'custom');
+      });
+      document.getElementById('custom-color-panel').classList.add('visible');
+      if (currentCards.length > 0) generateCards();
+    }
+
+    function deleteSavedTemplate() {
+      const sel = document.getElementById('saved-template-list');
+      if (!sel.value) { alert('请先选择要删除的模板'); return; }
+      const id = parseInt(sel.value);
+      let templates = getSavedTemplates().filter(t => t.id !== id);
+      localStorage.setItem('xhs-saved-templates', JSON.stringify(templates));
+      updateTemplateList();
+    }
+
+    function updateTemplateList() {
+      const templates = getSavedTemplates();
+      const sel = document.getElementById('saved-template-list');
+      sel.innerHTML = '<option value="">已保存的模板...</option>';
+      templates.forEach(t => {
+        sel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+      });
+    }
+
+    document.getElementById('saved-template-list').addEventListener('change', e => {
+      if (e.target.value) loadSavedTemplate(e.target.value);
+    });
+
+    // ========== Draft Management (localStorage) ==========
+    function getSavedDrafts() {
+      try { return JSON.parse(localStorage.getItem('xhs-saved-drafts') || '[]'); }
+      catch { return []; }
+    }
+
+    function saveDraft() {
+      const name = prompt('草稿名称：', '草稿 ' + (getSavedDrafts().length + 1));
+      if (!name) return;
+      const draft = {
+        id: Date.now(),
+        name: name,
+        content: document.getElementById('card-input').value,
+        brand: document.getElementById('brand-name').value,
+        template: currentTemplate,
+        font: currentFont,
+        customColors: {
+          bg: document.getElementById('color-bg').value,
+          title: document.getElementById('color-title').value,
+          body: document.getElementById('color-body').value,
+          accent: document.getElementById('color-accent').value
+        },
+        cardOverrides: JSON.parse(JSON.stringify(cardOverrides)),
+        timestamp: new Date().toISOString()
+      };
+      const drafts = getSavedDrafts();
+      drafts.push(draft);
+      localStorage.setItem('xhs-saved-drafts', JSON.stringify(drafts));
+      updateDraftList();
+      const sel = document.getElementById('draft-list');
+      sel.value = draft.id;
+    }
+
+    function loadDraft(id) {
+      if (!id) return;
+      const draft = getSavedDrafts().find(d => d.id === parseInt(id));
+      if (!draft) return;
+
+      document.getElementById('card-input').value = draft.content || '';
+      document.getElementById('brand-name').value = draft.brand || 'Authera';
+
+      currentTemplate = draft.template || 'warm-cream';
+      document.querySelectorAll('.template-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.template === currentTemplate);
+      });
+
+      currentFont = draft.font || 'default';
+      document.querySelectorAll('.font-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.font === currentFont);
+      });
+
+      if (draft.customColors) {
+        document.getElementById('color-bg').value = draft.customColors.bg;
+        document.getElementById('color-title').value = draft.customColors.title;
+        document.getElementById('color-body').value = draft.customColors.body;
+        document.getElementById('color-accent').value = draft.customColors.accent;
+      }
+
+      document.getElementById('custom-color-panel').classList.toggle('visible', currentTemplate === 'custom');
+      cardOverrides = draft.cardOverrides ? JSON.parse(JSON.stringify(draft.cardOverrides)) : {};
+      closeCardEditor();
+      generateCards();
+    }
+
+    function deleteDraft() {
+      const sel = document.getElementById('draft-list');
+      if (!sel.value) { alert('请先选择要删除的草稿'); return; }
+      const id = parseInt(sel.value);
+      let drafts = getSavedDrafts().filter(d => d.id !== id);
+      localStorage.setItem('xhs-saved-drafts', JSON.stringify(drafts));
+      updateDraftList();
+    }
+
+    function updateDraftList() {
+      const drafts = getSavedDrafts();
+      const sel = document.getElementById('draft-list');
+      sel.innerHTML = '<option value="">选择草稿...</option>';
+      drafts.forEach(d => {
+        const date = new Date(d.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        sel.innerHTML += `<option value="${d.id}">${d.name} (${date})</option>`;
+      });
+    }
+
+    document.getElementById('draft-list').addEventListener('change', e => {
+      if (e.target.value) loadDraft(e.target.value);
+    });
+
+    // ========== Auto-save ==========
+    function autoSave() {
+      try {
+        const state = {
+          content: document.getElementById('card-input').value,
+          brand: document.getElementById('brand-name').value,
+          template: currentTemplate,
+          font: currentFont,
+          customColors: {
+            bg: document.getElementById('color-bg').value,
+            title: document.getElementById('color-title').value,
+            body: document.getElementById('color-body').value,
+            accent: document.getElementById('color-accent').value
+          },
+          cardOverrides: JSON.parse(JSON.stringify(cardOverrides))
+        };
+        localStorage.setItem('xhs-autosave', JSON.stringify(state));
+      } catch (e) { /* localStorage might be full or disabled */ }
+    }
+
+    function loadAutoSave() {
+      try {
+        const state = JSON.parse(localStorage.getItem('xhs-autosave'));
+        if (!state || !state.content || !state.content.trim()) return;
+
+        document.getElementById('card-input').value = state.content;
+        document.getElementById('brand-name').value = state.brand || 'Authera';
+        currentTemplate = state.template || 'warm-cream';
+        currentFont = state.font || 'default';
+
+        if (state.customColors) {
+          document.getElementById('color-bg').value = state.customColors.bg;
+          document.getElementById('color-title').value = state.customColors.title;
+          document.getElementById('color-body').value = state.customColors.body;
+          document.getElementById('color-accent').value = state.customColors.accent;
+        }
+
+        cardOverrides = state.cardOverrides ? JSON.parse(JSON.stringify(state.cardOverrides)) : {};
+
+        document.querySelectorAll('.template-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.template === currentTemplate);
+        });
+        document.querySelectorAll('.font-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.font === currentFont);
+        });
+        document.getElementById('custom-color-panel').classList.toggle('visible', currentTemplate === 'custom');
+
+        generateCards();
+      } catch (e) { /* ignore */ }
+    }
+
+    // ========== Sample Content ==========
+    function loadSample() {
+      document.getElementById('card-input').value = SAMPLE_CONTENT;
+      generateCards();
+    }
+
+    // Auto-save on text input
+    document.getElementById('card-input').addEventListener('input', () => {
+      clearTimeout(window._autosaveTimer);
+      window._autosaveTimer = setTimeout(autoSave, 1000);
+    });
+    document.getElementById('brand-name').addEventListener('input', autoSave);
+
+    // ========== Initialize on page load ==========
+    updateTemplateList();
+    updateDraftList();
+    loadAutoSave();
+
+    const SAMPLE_CONTENT = `# 别骗自己了：你的行为模式，才是真正的你
+
+【封面卡】
+## 别骗自己了
+你的行为模式，才是真正的你
+
+习惯形成以前，所有的"改变"都只是暂时的。
+
+【卡片 1】
+## 身份认同的核心问题
+
+你偶尔兴起健了身、练了琴、读了书——但习惯并没有建立。
+
+这种情况下，你还能认为自己"是个爱运动的人"吗？
+
+更根本的问题：**什么决定了你是谁？是你做了什么，还是你认为自己是什么样的？**
+
+【卡片 2】
+## 你有两重身份，但只有一层是真的
+
+**叙事身份** —— 你如何讲述自己是谁：
+- "我是一个有毅力的人"
+- "我热爱音乐"
+- "我注重健康"
+
+**行为身份** —— 你过去90天的行为模式实际描绘出的你是谁：
+- 健身出现了2次
+- 琴在角落积灰半年
+- 深夜刷手机比阅读更频繁
+
+这两个身份之间的裂缝，就是大多数人内心冲突的真正来源。
+
+【卡片 3】
+## 单次行为不构成身份
+
+一个人平时从不运动，某天突然跑了5公里。这一天他是"跑者"吗？
+
+不是。
+
+身份附着在**重复模式**上，而非离散事件上。一次跑步是事件，每周三次才是模式。
+
+> "三分钟热度"之所以让人空虚：行为投入了，但没沉淀为模式。
+
+【卡片 4】
+## 怎么缩小裂缝？三个动作
+
+**1. 找到你的北极星指标**
+
+想成为爱运动的人 → 北极星：**过去7天运动了几次？**
+
+**2. 做一次行为身份审计**
+
+把过去14天的行为数据交给一个陌生人看——他会怎么描述你？
+
+**3. 把频率降到你不会放弃的程度**
+
+别从"每周5次"开始。从**"每周1次，但绝不跳过"**开始。
+
+> 缩小裂缝的方式不是更用力地想，而是更诚实地做。
+
+【尾卡 / 互动引导】
+你觉得呢——你是你的行为，还是你的意图？
+
+💬 评论区聊聊你的"割裂时刻"`;
+  </script>
+</body>
+</html>
