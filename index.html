@@ -792,7 +792,7 @@
         </div>
         <div class="edit-control">
           <label>标题字号 <span id="val-h2size">54px</span></label>
-          <input type="range" id="edit-h2size" min="40" max="72" value="54">
+          <input type="range" id="edit-h2size" min="40" max="120" value="54">
         </div>
         <div class="edit-control">
           <label>行高 <span id="val-lineheight">1.9</span></label>
@@ -1113,16 +1113,28 @@
       if (cardEl.classList.contains('is-cover')) {
         const title = cardEl.querySelector('.card-title');
         const subtitle = cardEl.querySelector('.card-subtitle');
+        if (ov.textAlign) {
+          cardEl.style.textAlign = ov.textAlign;
+          // Override flexbox centering when not centered
+          cardEl.style.alignItems = ov.textAlign === 'center' ? 'center' : 'flex-start';
+        }
         if (title) {
           if (ov.h2FontSize) title.style.fontSize = ov.h2FontSize + 'px';
-          if (ov.textAlign) title.style.textAlign = ov.textAlign;
+          if (ov.textAlign) {
+            title.style.textAlign = ov.textAlign;
+            title.style.alignSelf = ov.textAlign === 'center' ? 'center' : 'stretch';
+            title.style.width = ov.textAlign === 'center' ? '' : '100%';
+          }
         }
         if (subtitle) {
           if (ov.bodyFontSize) subtitle.style.fontSize = ov.bodyFontSize + 'px';
           if (ov.bodyLineHeight) subtitle.style.lineHeight = ov.bodyLineHeight;
-          if (ov.textAlign) subtitle.style.textAlign = ov.textAlign;
+          if (ov.textAlign) {
+            subtitle.style.textAlign = ov.textAlign;
+            subtitle.style.alignSelf = ov.textAlign === 'center' ? 'center' : 'stretch';
+            subtitle.style.width = ov.textAlign === 'center' ? '' : '100%';
+          }
         }
-        if (ov.textAlign) cardEl.style.textAlign = ov.textAlign;
         return;
       }
 
@@ -1157,13 +1169,15 @@
         w.classList.toggle('editing', i === index);
       });
 
-      // Load current values
+      // Load current values (cover cards have different defaults)
+      const card = currentCards[index];
+      const isCover = card && card.type === 'cover';
       const ov = cardOverrides[index] || {};
-      const fsVal = ov.bodyFontSize || 42;
-      const h2Val = ov.h2FontSize || 54;
+      const fsVal = ov.bodyFontSize || (isCover ? 40 : 42);
+      const h2Val = ov.h2FontSize || (isCover ? 76 : 54);
       const lhVal = ov.bodyLineHeight || 1.9;
       const msVal = ov.marginSpace || 24;
-      const alignVal = ov.textAlign || 'left';
+      const alignVal = ov.textAlign || (isCover ? 'center' : 'left');
 
       document.getElementById('edit-fontsize').value = fsVal;
       document.getElementById('val-fontsize').textContent = fsVal + 'px';
