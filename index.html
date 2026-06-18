@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>小红书图文卡片生成器 v0.4</title>
+  <title>小红书图文卡片生成器 v0.5</title>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -493,15 +493,178 @@
       color: #666;
       margin-bottom: 12px;
     }
+    /* ===== Mobile Toolbar Toggle ===== */
+    .mobile-topbar {
+      display: none;
+    }
+
+    /* ===== Text Edit Tab ===== */
+    .edit-tab-group {
+      display: flex;
+      gap: 0;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .edit-tab {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 12px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: #999;
+      border-bottom: 2px solid transparent;
+    }
+    .edit-tab.active {
+      color: #8a6d3b;
+      border-bottom-color: #d4a574;
+      font-weight: 600;
+    }
+    .edit-tab-content { display: none; }
+    .edit-tab-content.active { display: block; }
+    .card-text-edit-area textarea {
+      width: 100%;
+      min-height: 100px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      font-family: inherit;
+    }
+    .card-text-edit-area textarea:focus { outline: none; border-color: #d4a574; }
+
+    /* ===== Mobile Responsive ===== */
+    @media (max-width: 768px) {
+      body { padding: 0; padding-bottom: env(safe-area-inset-bottom, 0); }
+
+      .app-container {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+
+      /* Mobile top bar */
+      .mobile-topbar {
+        display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        background: white;
+        padding: 10px 14px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .mobile-topbar-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .mobile-topbar-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      .mobile-topbar-btn {
+        padding: 6px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: white;
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mobile-topbar-btn.primary {
+        background: #8a6d3b;
+        color: white;
+        border-color: #8a6d3b;
+      }
+
+      /* Collapsible input panel */
+      .input-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 300;
+        border-radius: 0;
+        padding: 50px 16px 20px;
+        max-height: 100vh;
+        overflow-y: auto;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+      }
+      .input-panel.mobile-open {
+        transform: translateX(0);
+      }
+      .input-panel textarea {
+        min-height: 200px;
+      }
+
+      /* Preview area */
+      .cards-grid {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 12px;
+      }
+
+      .card-count-info {
+        text-align: center;
+        padding: 4px 0;
+      }
+
+      /* Always show overlay buttons on touch */
+      .card-overlay-btn { opacity: 1 !important; }
+
+      /* Edit panel as full-width bottom sheet */
+      .card-edit-panel {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        width: 100% !important;
+        border-radius: 16px 16px 0 0;
+        max-height: 75vh;
+        overflow-y: auto;
+      }
+      .card-edit-panel.visible {
+        display: block;
+        animation: slideUp 0.3s ease;
+      }
+      @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Mobile Top Bar -->
+  <div class="mobile-topbar" id="mobile-topbar">
+    <span class="mobile-topbar-title">卡片生成器</span>
+    <div class="mobile-topbar-actions">
+      <button class="mobile-topbar-btn" onclick="toggleMobilePanel()">设置</button>
+      <button class="mobile-topbar-btn primary" onclick="generateCards()">生成</button>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- Input Panel -->
     <div class="input-panel">
       <div>
         <h1 style="font-size: 20px; font-weight: 700; margin: 0 0 4px 0;">小红书图文卡片生成器</h1>
-        <p style="font-size: 13px; color: #888; margin: 0;">v0.4 · 支持单卡编辑、模板保存、草稿管理</p>
+        <p style="font-size: 13px; color: #888; margin: 0;">v0.5 · 移动端优化 · 支持文字编辑</p>
       </div>
 
       <div>
@@ -600,33 +763,51 @@
       <button onclick="closeCardEditor()">×</button>
     </div>
     <div class="edit-panel-body">
-      <div class="edit-control">
-        <label>正文字号 <span id="val-fontsize">42px</span></label>
-        <input type="range" id="edit-fontsize" min="32" max="56" value="42">
+      <div class="edit-tab-group">
+        <button class="edit-tab active" data-tab="style" onclick="switchEditTab('style')">排版</button>
+        <button class="edit-tab" data-tab="text" onclick="switchEditTab('text')">文字</button>
       </div>
-      <div class="edit-control">
-        <label>标题字号 <span id="val-h2size">54px</span></label>
-        <input type="range" id="edit-h2size" min="40" max="72" value="54">
-      </div>
-      <div class="edit-control">
-        <label>行高 <span id="val-lineheight">1.9</span></label>
-        <input type="range" id="edit-lineheight" min="1.5" max="2.5" step="0.05" value="1.9">
-      </div>
-      <div class="edit-control">
-        <label>对齐方式</label>
-        <div class="align-btn-group">
-          <button class="align-btn active" data-align="left">左对齐</button>
-          <button class="align-btn" data-align="center">居中</button>
-          <button class="align-btn" data-align="right">右对齐</button>
+      <!-- Style tab -->
+      <div class="edit-tab-content active" id="tab-style">
+        <div class="edit-control">
+          <label>正文字号 <span id="val-fontsize">42px</span></label>
+          <input type="range" id="edit-fontsize" min="32" max="56" value="42">
+        </div>
+        <div class="edit-control">
+          <label>标题字号 <span id="val-h2size">54px</span></label>
+          <input type="range" id="edit-h2size" min="40" max="72" value="54">
+        </div>
+        <div class="edit-control">
+          <label>行高 <span id="val-lineheight">1.9</span></label>
+          <input type="range" id="edit-lineheight" min="1.5" max="2.5" step="0.05" value="1.9">
+        </div>
+        <div class="edit-control">
+          <label>对齐方式</label>
+          <div class="align-btn-group">
+            <button class="align-btn active" data-align="left">左对齐</button>
+            <button class="align-btn" data-align="center">居中</button>
+            <button class="align-btn" data-align="right">右对齐</button>
+          </div>
+        </div>
+        <div class="edit-control">
+          <label>段间距 <span id="val-marginspace">24px</span></label>
+          <input type="range" id="edit-marginspace" min="12" max="48" value="24">
+        </div>
+        <div class="edit-actions">
+          <button class="btn-secondary" onclick="resetCardOverride()" style="font-size:12px;">重置此卡</button>
+          <button class="btn-secondary" onclick="applyOverridesToAll()" style="font-size:12px;">应用到全部</button>
         </div>
       </div>
-      <div class="edit-control">
-        <label>段间距 <span id="val-marginspace">24px</span></label>
-        <input type="range" id="edit-marginspace" min="12" max="48" value="24">
-      </div>
-      <div class="edit-actions">
-        <button class="btn-secondary" onclick="resetCardOverride()" style="font-size:12px;">重置此卡</button>
-        <button class="btn-secondary" onclick="applyOverridesToAll()" style="font-size:12px;">应用到全部</button>
+      <!-- Text edit tab -->
+      <div class="edit-tab-content" id="tab-text">
+        <div class="card-text-edit-area">
+          <label style="font-size:12px;color:#666;display:block;margin-bottom:6px;">编辑卡片文字（支持 Markdown）</label>
+          <textarea id="card-text-edit" placeholder="编辑此卡片的文字内容..."></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn-secondary" onclick="saveCardText()" style="flex:1;font-size:12px;">保存文字</button>
+            <button class="btn-secondary" onclick="closeCardEditor()" style="flex:1;font-size:12px;">取消</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -889,6 +1070,7 @@
 
       applyAllCardOverrides();
       autoSave();
+      closeMobilePanel();
     }
 
     // ========== Per-card Overrides ==========
@@ -958,6 +1140,61 @@
       editingCardIndex = -1;
       document.getElementById('card-edit-panel').classList.remove('visible');
       document.querySelectorAll('.card-wrapper').forEach(w => w.classList.remove('editing'));
+      // Reset to style tab
+      switchEditTab('style');
+    }
+
+    // ========== Mobile Panel Toggle ==========
+    function toggleMobilePanel() {
+      document.querySelector('.input-panel').classList.toggle('mobile-open');
+    }
+
+    function closeMobilePanel() {
+      document.querySelector('.input-panel').classList.remove('mobile-open');
+    }
+
+    // ========== Edit Tab Switching ==========
+    function switchEditTab(tabName) {
+      document.querySelectorAll('.edit-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.edit-tab-content').forEach(c => {
+        c.classList.toggle('active', c.id === 'tab-' + tabName);
+      });
+      // Load text content when switching to text tab
+      if (tabName === 'text' && editingCardIndex >= 0) {
+        const card = currentCards[editingCardIndex];
+        if (card) {
+          document.getElementById('card-text-edit').value = card.content || '';
+        }
+      }
+    }
+
+    // ========== Inline Text Editing ==========
+    function saveCardText() {
+      if (editingCardIndex < 0) return;
+      const newText = document.getElementById('card-text-edit').value;
+      if (!newText.trim()) return;
+
+      // Update card data
+      currentCards[editingCardIndex].content = newText;
+
+      // Re-render just this one card
+      const card = currentCards[editingCardIndex];
+      const brandName = document.getElementById('brand-name').value.trim();
+      const cardHTML = renderCardHTML(card, editingCardIndex + 1, brandName);
+      const scaleContainer = document.getElementById('scale-' + editingCardIndex);
+      if (scaleContainer) {
+        scaleContainer.innerHTML = cardHTML;
+        if (currentTemplate === 'custom') {
+          const cardEl = scaleContainer.querySelector('.xhs-card');
+          if (cardEl) applyCustomColors(cardEl);
+        }
+        applyCardOverrides(editingCardIndex);
+      }
+
+      autoSave();
+      closeCardEditor();
     }
 
     function updateEditValue(prop, value) {
