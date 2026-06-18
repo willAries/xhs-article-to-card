@@ -814,6 +814,16 @@
           <button class="btn-secondary" onclick="resetCardOverride()" style="font-size:12px;">重置此卡</button>
           <button class="btn-secondary" onclick="applyOverridesToAll()" style="font-size:12px;">应用到全部</button>
         </div>
+        <div class="edit-control" style="padding-top:8px;border-top:1px solid #eee;">
+          <label style="font-size:12px;color:#666;">排版模板</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="style-template-list" style="flex:1;font-size:11px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;">
+              <option value="">排版模板...</option>
+            </select>
+            <button class="btn-tiny" onclick="saveStyleTemplate()">存排版</button>
+            <button class="btn-tiny" onclick="loadStyleTemplate()">载入</button>
+          </div>
+        </div>
       </div>
       <!-- Text edit tab -->
       <div class="edit-tab-content" id="tab-text">
@@ -1099,6 +1109,24 @@
       const ov = cardOverrides[index];
       if (!ov) return;
 
+      // Cover cards: target title + subtitle instead of body
+      if (cardEl.classList.contains('is-cover')) {
+        const title = cardEl.querySelector('.card-title');
+        const subtitle = cardEl.querySelector('.card-subtitle');
+        if (title) {
+          if (ov.h2FontSize) title.style.fontSize = ov.h2FontSize + 'px';
+          if (ov.textAlign) title.style.textAlign = ov.textAlign;
+        }
+        if (subtitle) {
+          if (ov.bodyFontSize) subtitle.style.fontSize = ov.bodyFontSize + 'px';
+          if (ov.bodyLineHeight) subtitle.style.lineHeight = ov.bodyLineHeight;
+          if (ov.textAlign) subtitle.style.textAlign = ov.textAlign;
+        }
+        if (ov.textAlign) cardEl.style.textAlign = ov.textAlign;
+        return;
+      }
+
+      // Normal content cards
       const body = cardEl.querySelector('.card-body');
       if (body) {
         if (ov.bodyFontSize) body.style.fontSize = ov.bodyFontSize + 'px';
@@ -1319,6 +1347,52 @@
       }
       applyAllCardOverrides();
       autoSave();
+    }
+
+    // ========== Style Templates (localStorage) ==========
+    function getStyleTemplates() {
+      try { return JSON.parse(localStorage.getItem('xhs-style-templates') || '[]'); }
+      catch { return []; }
+    }
+
+    function saveStyleTemplate() {
+      if (editingCardIndex < 0) return;
+      const ov = cardOverrides[editingCardIndex];
+      if (!ov || Object.keys(ov).length === 0) {
+        alert('请先调整排版设置，再保存为模板');
+        return;
+      }
+      const name = prompt('排版模板名称：', '排版 ' + (getStyleTemplates().length + 1));
+      if (!name) return;
+      const tpl = { id: Date.now(), name: name, style: JSON.parse(JSON.stringify(ov)) };
+      const templates = getStyleTemplates();
+      templates.push(tpl);
+      localStorage.setItem('xhs-style-templates', JSON.stringify(templates));
+      updateStyleTemplateList();
+      const sel = document.getElementById('style-template-list');
+      sel.value = tpl.id;
+    }
+
+    function loadStyleTemplate() {
+      if (editingCardIndex < 0) return;
+      const sel = document.getElementById('style-template-list');
+      if (!sel.value) { alert('请选择一个排版模板'); return; }
+      const tpl = getStyleTemplates().find(t => t.id === parseInt(sel.value));
+      if (!tpl) return;
+      cardOverrides[editingCardIndex] = JSON.parse(JSON.stringify(tpl.style));
+      applyCardOverrides(editingCardIndex);
+      autoSave();
+      openCardEditor(editingCardIndex);
+    }
+
+    function updateStyleTemplateList() {
+      const templates = getStyleTemplates();
+      const sel = document.getElementById('style-template-list');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">排版模板...</option>';
+      templates.forEach(t => {
+        sel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+      });
     }
 
     // Edit panel event listeners
@@ -1635,6 +1709,7 @@
     // ========== Initialize on page load ==========
     updateTemplateList();
     updateDraftList();
+    updateStyleTemplateList();
     loadAutoSave();
 
     const SAMPLE_CONTENT = `# 别骗自己了：你的行为模式，才是真正的你
